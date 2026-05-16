@@ -1,0 +1,26 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Equity {
+  id           BigInt      @id @default(autoincrement())
+  tradeDate    DateTime    @map("trade_date") @db.Date
+  security     String      @db.Text
+  openingPrice Decimal     @default(0) @map("opening_price") @db.Decimal(18, 8)
+  closingPrice Decimal     @default(0) @map("closing_price") @db.Decimal(18, 8)
+  volume       BigInt      @default(0)
+  value        Decimal     @default(0) @db.Decimal(18, 8)
+  insertedAt   DateTime    @default(now()) @map("inserted_at") @db.Timestamptz()
+
+  @@unique([tradeDate, security], name: "unique_trade_date_security")
+  @@index([tradeDate], name: "idx_rse_equities_trade_date")
+  @@map("rse_equities")
+}

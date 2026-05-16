@@ -1,0 +1,25 @@
+name: RSE Daily Scraper
+
+on:
+  schedule:
+    - cron: '15 15 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run scraper
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RSE_SCRAPE_URL: ${{ secrets.RSE_SCRAPE_URL }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          BACKUP_RAW_JSON: ${{ secrets.BACKUP_RAW_JSON }}
+        run: npm run start
