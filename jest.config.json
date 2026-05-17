@@ -1,5 +1,6 @@
 {
   "testEnvironment": "node",
+  "setupFiles": ["./jest.setup.js"],
   "testMatch": ["**/tests/**/*.test.js"],
   "collectCoverageFrom": [
     "src/**/*.js",
