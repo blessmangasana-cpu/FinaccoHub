@@ -29,6 +29,7 @@ jobs:
       - name: Apply Database Migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: npx prisma migrate deploy
         
       - name: Run Daily Scrape Job
