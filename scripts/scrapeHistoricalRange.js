@@ -26,7 +26,7 @@ const generateDateRange = (startStr, endStr) => {
     if (isTradingDay(dateStr)) {
       dates.push(dateStr);
     }
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
 
   return dates;

@@ -9,7 +9,6 @@
     "scrape": "node src/scraper/scrapeRSE.js",
     "scrape:history": "node scripts/scrapeHistory.js --weeks=7",
     "scrape:range": "node scripts/scrapeHistoricalRange.js --start=2026-01-01 --end=2026-05-15",
-    "scheduler": "node src/jobs/scheduler.js",
     "lint": "node scripts/checkSyntax.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --no-coverage",
     "prisma:generate": "prisma generate",

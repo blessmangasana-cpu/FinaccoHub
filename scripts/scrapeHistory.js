@@ -12,11 +12,17 @@ const weeks = Number(parseArg('weeks', '7')) || 7;
 const direction = parseArg('direction', 'past');
 const currentDate = currentRwandaDate();
 
+import { isTradingDay } from '../src/utils/marketCalendar.js';
+
 const buildDates = () => {
   const dates = [];
-  for (let i = 0; i < weeks; i += 1) {
-    const offset = direction === 'future' ? -i * 7 : i * 7;
-    dates.push(subtractDays(currentDate, offset));
+  const totalDays = weeks * 7;
+  for (let i = 0; i < totalDays; i += 1) {
+    const offset = direction === 'future' ? -i : i;
+    const dateStr = subtractDays(currentDate, offset);
+    if (isTradingDay(dateStr)) {
+      dates.push(dateStr);
+    }
   }
   return dates;
 };

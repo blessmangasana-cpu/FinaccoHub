@@ -15,6 +15,6 @@ export const currentRwandaDate = () => {
 
 export const subtractDays = (value, days) => {
   const date = new Date(value);
-  date.setDate(date.getDate() - days);
+  date.setUTCDate(date.getUTCDate() - days);
   return formatDate(date);
 };
