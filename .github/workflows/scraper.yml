@@ -2,24 +2,110 @@ name: RSE Daily Scraper
 
 on:
   schedule:
-    - cron: '15 15 * * *'
+    # 15:15 UTC = 17:15 Africa/Kigali (UTC+2)
+    - cron: '15 15 * * 1-5'  # Monday to Friday (trading days)
   workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.repository.fork == false
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
+          cache: 'npm'
+      
       - name: Install dependencies
         run: npm ci
-      - name: Run scraper
+      
+      - name: Validate environment variables
+        shell: bash
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ ERROR: DATABASE_URL secret is not set"
+            exit 1
+          fi
+          if [ -z "$RSE_SCRAPE_URL" ]; then
+            echo "❌ ERROR: RSE_SCRAPE_URL secret is not set"
+            exit 1
+          fi
+          echo "✅ All required secrets are configured"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RSE_SCRAPE_URL: ${{ secrets.RSE_SCRAPE_URL }}
-          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
-          BACKUP_RAW_JSON: ${{ secrets.BACKUP_RAW_JSON }}
+      
+      - name: Run migrations
+        if: github.event.repository.fork == false
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy --skip-generate
+      
+      - name: Run scraper (Attempt 1)
+        id: scraper_attempt1
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RSE_SCRAPE_URL: ${{ secrets.RSE_SCRAPE_URL }}
+          LOG_LEVEL: info
+          BACKUP_RAW_JSON: 'true'
+          NODE_ENV: production
         run: npm run start
+      
+      - name: Wait before retry (Attempt 2)
+        if: steps.scraper_attempt1.outcome == 'failure'
+        run: sleep 10
+      
+      - name: Run scraper (Attempt 2 - Retry)
+        id: scraper_attempt2
+        if: steps.scraper_attempt1.outcome == 'failure'
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RSE_SCRAPE_URL: ${{ secrets.RSE_SCRAPE_URL }}
+          LOG_LEVEL: info
+          BACKUP_RAW_JSON: 'true'
+          NODE_ENV: production
+        run: npm run start
+      
+      - name: Wait before retry (Attempt 3)
+        if: steps.scraper_attempt2.outcome == 'failure'
+        run: sleep 20
+      
+      - name: Run scraper (Attempt 3 - Final Retry)
+        id: scraper_attempt3
+        if: steps.scraper_attempt2.outcome == 'failure'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RSE_SCRAPE_URL: ${{ secrets.RSE_SCRAPE_URL }}
+          LOG_LEVEL: info
+          BACKUP_RAW_JSON: 'true'
+          NODE_ENV: production
+        run: npm run start
+      
+      - name: Upload logs on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: scraper-logs
+          path: data/logs/
+          retention-days: 7
+      
+      - name: Job completed successfully
+        if: success()
+        run: echo "✅ RSE scraper job completed successfully at $(date)"
+      
+      - name: Job failed after all retries
+        if: failure()
+        run: |
+          echo "❌ RSE scraper job failed after 3 attempts"
+          exit 1

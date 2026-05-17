@@ -16,7 +16,7 @@ export const getRwandaHourMinute = (date = new Date()) => {
 
   const hour = parts.find((part) => part.type === 'hour')?.value;
   const minute = parts.find((part) => part.type === 'minute')?.value;
-  return `${hour}:${minute}`;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
 export const initializeScheduler = async () => {

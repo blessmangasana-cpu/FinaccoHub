@@ -4,8 +4,13 @@ export const formatDate = (value) => {
 };
 
 export const currentRwandaDate = () => {
-  const date = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kigali' }));
-  return date.toISOString().slice(0, 10);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Kigali',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(new Date());
 };
 
 export const subtractDays = (value, days) => {
