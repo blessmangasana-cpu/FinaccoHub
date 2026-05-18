@@ -55,6 +55,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/RSE
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/RSE
+        run: npx prisma generate
+      
       - name: Wait for PostgreSQL
         run: |
           for i in {1..30}; do
@@ -68,9 +74,12 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/RSE
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/RSE
       
       - name: Run tests
         run: npm test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/RSE
+          DIRECT_URL: postgresql://postgres:postgres@localhost:5432/RSE
+          RSE_SCRAPE_URL: https://www.rse.rw/
           NODE_ENV: test
