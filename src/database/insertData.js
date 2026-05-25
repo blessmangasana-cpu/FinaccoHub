@@ -33,6 +33,9 @@ export const insertData = async (records) => {
         }
       })
     ));
+  }, {
+    maxWait: 10000, // 10 seconds max wait
+    timeout: 15000, // 15 seconds timeout
   });
 
   return { inserted: created.length, skipped: records.length - created.length };
