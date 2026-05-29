@@ -6,6 +6,15 @@ on:
     - cron: '15 15 * * 1-5'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: daily-scrape
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -16,6 +25,160 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Collect Workflow Timing
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const workflowId = 'daily-scrape.yml';
+            const defaultSchedule = '15 15 * * 1-5';
+            const scheduleForDelay = context.payload.schedule || defaultSchedule;
+            const [scheduleMinuteRaw, scheduleHourRaw] = scheduleForDelay.trim().split(/\s+/);
+            const scheduleMinute = Number(scheduleMinuteRaw);
+            const scheduleHour = Number(scheduleHourRaw);
+            const outputDir = path.join(process.cwd(), 'data', 'workflow-timing');
+            fs.mkdirSync(outputDir, { recursive: true });
+
+            const formatKigali = (value) => {
+              if (!value) return '';
+              return new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Africa/Kigali',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }).format(new Date(value));
+            };
+
+            const expectedScheduleFor = (value) => {
+              if (!value) return null;
+              if (!Number.isInteger(scheduleMinute) || !Number.isInteger(scheduleHour)) return null;
+              const actual = new Date(value);
+              if (Number.isNaN(actual.getTime())) return null;
+
+              const expected = new Date(Date.UTC(
+                actual.getUTCFullYear(),
+                actual.getUTCMonth(),
+                actual.getUTCDate(),
+                scheduleHour,
+                scheduleMinute,
+                0
+              ));
+
+              if (actual < expected) {
+                expected.setUTCDate(expected.getUTCDate() - 1);
+              }
+
+              return expected;
+            };
+
+            const minutesBetween = (actual, expected) => {
+              if (!actual || !expected) return null;
+              return Math.round((new Date(actual).getTime() - expected.getTime()) / 60000);
+            };
+
+            const csvValue = (value) => {
+              const text = value === null || value === undefined ? '' : String(value);
+              return `"${text.replaceAll('"', '""')}"`;
+            };
+
+            const current = {
+              workflow: context.workflow,
+              run_id: context.runId,
+              run_number: context.runNumber,
+              event_name: context.eventName,
+              configured_schedule: context.payload.schedule || null,
+              schedule_used_for_delay: scheduleForDelay,
+              collected_at_utc: new Date().toISOString(),
+              collected_at_africa_kigali: formatKigali(new Date())
+            };
+
+            const response = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflowId,
+              per_page: 30
+            });
+
+            const runs = response.data.workflow_runs.map((run) => {
+              const actual = run.run_started_at || run.created_at;
+              const expected = run.event === 'schedule' ? expectedScheduleFor(actual) : null;
+
+              return {
+                run_number: run.run_number,
+                event: run.event,
+                status: run.status,
+                conclusion: run.conclusion,
+                created_at_utc: run.created_at,
+                run_started_at_utc: run.run_started_at || null,
+                run_started_at_africa_kigali: formatKigali(actual),
+                expected_schedule_utc: expected ? expected.toISOString() : null,
+                delay_minutes: expected ? minutesBetween(actual, expected) : null,
+                html_url: run.html_url
+              };
+            });
+
+            fs.writeFileSync(
+              path.join(outputDir, 'current-run.json'),
+              JSON.stringify(current, null, 2),
+              'utf8'
+            );
+
+            fs.writeFileSync(
+              path.join(outputDir, 'recent-runs.json'),
+              JSON.stringify(runs, null, 2),
+              'utf8'
+            );
+
+            const columns = [
+              'run_number',
+              'event',
+              'status',
+              'conclusion',
+              'created_at_utc',
+              'run_started_at_utc',
+              'run_started_at_africa_kigali',
+              'expected_schedule_utc',
+              'delay_minutes',
+              'html_url'
+            ];
+            const csv = [
+              columns.join(','),
+              ...runs.map((run) => columns.map((column) => csvValue(run[column])).join(','))
+            ].join('\n');
+            fs.writeFileSync(path.join(outputDir, 'recent-runs.csv'), `${csv}\n`, 'utf8');
+
+            const tableRows = runs.slice(0, 10).map((run) => [
+              String(run.run_number),
+              run.event,
+              run.run_started_at_africa_kigali,
+              run.expected_schedule_utc || '',
+              run.delay_minutes === null ? '' : String(run.delay_minutes),
+              run.conclusion || run.status
+            ]);
+
+            await core.summary
+              .addHeading('Workflow timing')
+              .addRaw(`Configured cron: ${current.configured_schedule || `${scheduleForDelay} (manual run)`}\n\n`)
+              .addTable([
+                [
+                  { data: 'Run', header: true },
+                  { data: 'Event', header: true },
+                  { data: 'Started Africa/Kigali', header: true },
+                  { data: 'Expected UTC', header: true },
+                  { data: 'Delay min', header: true },
+                  { data: 'Result', header: true }
+                ],
+                ...tableRows
+              ])
+              .write();
         
       - name: Setup Node.js
         uses: actions/setup-node@v4
